@@ -71,6 +71,10 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/articles", articleHandler.GetArticles).Methods("GET")
 	api.HandleFunc("/articles/{id}", articleHandler.GetArticle).Methods("GET")
 	api.HandleFunc("/articles/{id}", articleHandler.DeleteArticle).Methods("DELETE")
+
+	// Chat routes
+	chatHandler := handlers.NewChatHandler(s.db, geminiService)
+	api.HandleFunc("/articles/{id}/chat", chatHandler.ChatWithArticle).Methods("POST")
 }
 
 func (s *Server) Start() error {

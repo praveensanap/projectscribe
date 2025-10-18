@@ -335,3 +335,90 @@ func (g *GeminiService) GenerateThumbnail(summary string) ([]byte, error) {
 
 	return nil, fmt.Errorf("no image data in response")
 }
+
+// ChatMessage represents a single message in a chat conversation
+type ChatMessage struct {
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content string `json:"content"` // The message content
+}
+
+// ChatWithArticle generates a response to a user's question about an article
+// using the article content as context and considering the chat history
+func (g *GeminiService) ChatWithArticle(articleContent string, chatHistory []ChatMessage, userMessage string) (string, error) {
+	// Build the conversation context with the article content
+	systemPrompt := fmt.Sprintf(`You are a helpful assistant that answers questions about the following article. Use the article content to provide accurate, informative answers. If the question cannot be answered using the article content, politely let the user know.
+
+Article Content:
+%s
+
+Please provide clear, concise, and helpful responses based on this article.`, articleContent)
+
+	// Build the conversation history for Gemini
+	contents := []geminiContent{
+		{
+			Parts: []geminiPart{
+				{Text: systemPrompt},
+			},
+		},
+	}
+
+	// Add chat history
+	for _, msg := range chatHistory {
+		contents = append(contents, geminiContent{
+			Parts: []geminiPart{
+				{Text: fmt.Sprintf("%s: %s", msg.Role, msg.Content)},
+			},
+		})
+	}
+
+	// Add the current user message
+	contents = append(contents, geminiContent{
+		Parts: []geminiPart{
+			{Text: fmt.Sprintf("user: %s", userMessage)},
+		},
+	})
+
+	reqBody := geminiRequest{
+		Contents: contents,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=%s", g.apiKey)
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gemini API error: %s - %s", resp.Status, string(body))
+	}
+
+	var geminiResp geminiResponse
+	if err := json.Unmarshal(body, &geminiResp); err != nil {
+		return "", err
+	}
+
+	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("no content in response")
+	}
+
+	response := geminiResp.Candidates[0].Content.Parts[0].Text
+	return strings.TrimSpace(response), nil
+}
