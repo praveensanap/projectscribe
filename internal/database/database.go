@@ -26,43 +26,32 @@ func NewConnection(databaseURL string) (*sql.DB, error) {
 }
 
 func RunMigrations(db *sql.DB) error {
-	// Create a sample users table
 	query := `
-		CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			email VARCHAR(255) UNIQUE NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS notes (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			title VARCHAR(255) NOT NULL,
-			content TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
 		CREATE TABLE IF NOT EXISTS articles (
-			id SERIAL PRIMARY KEY,
+			id BIGSERIAL PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES auth.users(id),
 			url TEXT NOT NULL,
-			format VARCHAR(10) NOT NULL CHECK (format IN ('text', 'audio')),
-			length VARCHAR(10) NOT NULL CHECK (length IN ('s', 'm', 'l')),
-			language VARCHAR(50),
-			style VARCHAR(100),
-			status VARCHAR(20) NOT NULL DEFAULT 'init' CHECK (status IN ('init', 'processing', 'available', 'failed')),
+			title TEXT,
+			format TEXT NOT NULL CHECK (format IN ('text', 'audio', 'video')),
+			length TEXT NOT NULL CHECK (length IN ('s', 'm', 'l')),
+			status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processing', 'ready', 'failed')),
+			thumbnail_path TEXT,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW(),
+			language TEXT,
+			style TEXT,
 			original_content TEXT,
 			summary TEXT,
+			text_body TEXT,
 			audio_file_path TEXT,
-			error_message TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			video_file_path TEXT,
+			duration_seconds INTEGER,
+			error_message TEXT
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);
 		CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status);
+		CREATE INDEX IF NOT EXISTS idx_articles_user_id ON articles(user_id);
+		CREATE INDEX IF NOT EXISTS idx_articles_format ON articles(format);
 	`
 
 	_, err := db.Exec(query)

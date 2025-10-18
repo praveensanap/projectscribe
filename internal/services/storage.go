@@ -17,10 +17,11 @@ type StorageService struct {
 	client     *s3.Client
 	bucketName string
 	endpoint   string
+	publicURL  string
 }
 
 // NewStorageService creates a new storage service using Supabase's S3-compatible endpoint
-func NewStorageService(endpoint, region, accessKey, secretKey, bucketName string) (*StorageService, error) {
+func NewStorageService(endpoint, publicURL, region, accessKey, secretKey, bucketName string) (*StorageService, error) {
 	// Create custom resolver for Supabase endpoint
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		if service == s3.ServiceID {
@@ -52,6 +53,7 @@ func NewStorageService(endpoint, region, accessKey, secretKey, bucketName string
 		client:     client,
 		bucketName: bucketName,
 		endpoint:   endpoint,
+		publicURL:  publicURL,
 	}, nil
 }
 
@@ -70,7 +72,7 @@ func (s *StorageService) UploadFile(ctx context.Context, key string, data []byte
 	}
 
 	// Generate public URL
-	publicURL := fmt.Sprintf("%s/object/public/%s/%s", s.endpoint, s.bucketName, key)
+	publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.publicURL, s.bucketName, key)
 	return publicURL, nil
 }
 
@@ -112,10 +114,15 @@ func (s *StorageService) DeleteFile(ctx context.Context, key string) error {
 
 // GetPublicURL returns the public URL for a file
 func (s *StorageService) GetPublicURL(key string) string {
-	return fmt.Sprintf("%s/object/public/%s/%s", s.endpoint, s.bucketName, key)
+	return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.publicURL, s.bucketName, key)
 }
 
 // GenerateAudioKey generates a storage key for an audio file
-func GenerateAudioKey(articleID int) string {
+func GenerateAudioKey(articleID int64) string {
 	return filepath.Join("audio", fmt.Sprintf("article_%d.mp3", articleID))
+}
+
+// GenerateThumbnailKey generates a storage key for a thumbnail image
+func GenerateThumbnailKey(articleID int64) string {
+	return filepath.Join("thumbnails", fmt.Sprintf("article_%d.png", articleID))
 }

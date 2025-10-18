@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,18 +13,20 @@ type Processor struct {
 	db                *sql.DB
 	geminiService     *services.GeminiService
 	elevenLabsService *services.ElevenLabsService
+	storageService    *services.StorageService
 }
 
-func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService) *Processor {
+func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService, storageService *services.StorageService) *Processor {
 	return &Processor{
 		db:                db,
 		geminiService:     geminiService,
 		elevenLabsService: elevenLabsService,
+		storageService:    storageService,
 	}
 }
 
 // ProcessArticle processes an article in the background
-func (p *Processor) ProcessArticle(articleID int) {
+func (p *Processor) ProcessArticle(articleID int64) {
 	log.Printf("Starting to process article %d", articleID)
 
 	// Update status to processing
@@ -52,18 +55,53 @@ func (p *Processor) ProcessArticle(articleID int) {
 		return
 	}
 
-	// Save the original content and summary
-	updateQuery := `UPDATE articles SET original_content = $1, summary = $2, updated_at = CURRENT_TIMESTAMP
-	                WHERE id = $3`
-	if _, err := p.db.Exec(updateQuery, originalContent, summary, articleID); err != nil {
+	// Generate title from the original content
+	log.Printf("Generating title for article %d", articleID)
+	title, err := p.geminiService.GenerateTitle(originalContent)
+	if err != nil {
+		log.Printf("Failed to generate title for article %d: %v", articleID, err)
+		// Don't fail the entire process if title generation fails
+		// Just use a default title
+		title = "Untitled Article"
+	}
+
+	// Save the original content, title, and summary
+	updateQuery := `UPDATE articles SET original_content = $1, title = $2, summary = $3, updated_at = CURRENT_TIMESTAMP
+	                WHERE id = $4`
+	if _, err := p.db.Exec(updateQuery, originalContent, title, summary, articleID); err != nil {
 		log.Printf("Failed to save summary for article %d: %v", articleID, err)
 		p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to save summary: %v", err))
 		return
 	}
 
-	log.Printf("Successfully summarized article %d", articleID)
+	log.Printf("Successfully summarized article %d with title: %s", articleID, title)
 
-	// Step 2: If format is audio, convert to speech using ElevenLabs
+	// Step 2: Generate thumbnail from summary
+	log.Printf("Generating thumbnail for article %d", articleID)
+	thumbnailData, err := p.geminiService.GenerateThumbnail(summary)
+	if err != nil {
+		log.Printf("Failed to generate thumbnail for article %d: %v", articleID, err)
+		// Don't fail the entire process if thumbnail generation fails
+		// Just log and continue
+	} else {
+		// Upload thumbnail to storage
+		thumbnailKey := services.GenerateThumbnailKey(articleID)
+		thumbnailURL, err := p.storageService.UploadFile(context.Background(), thumbnailKey, thumbnailData, "image/png")
+		if err != nil {
+			log.Printf("Failed to upload thumbnail for article %d: %v", articleID, err)
+		} else {
+			// Save thumbnail path
+			updateQuery := `UPDATE articles SET thumbnail_path = $1, updated_at = CURRENT_TIMESTAMP
+			                WHERE id = $2`
+			if _, err := p.db.Exec(updateQuery, thumbnailURL, articleID); err != nil {
+				log.Printf("Failed to save thumbnail path for article %d: %v", articleID, err)
+			} else {
+				log.Printf("Successfully generated and uploaded thumbnail for article %d", articleID)
+			}
+		}
+	}
+
+	// Step 3: If format is audio, convert to speech using ElevenLabs
 	if format == "audio" {
 		log.Printf("Converting article %d to speech", articleID)
 
@@ -96,17 +134,17 @@ func (p *Processor) ProcessArticle(articleID int) {
 		log.Printf("Successfully converted article %d to speech", articleID)
 	}
 
-	// Update status to available
-	if err := p.updateArticleStatus(articleID, "available", ""); err != nil {
-		log.Printf("Failed to update article %d status to available: %v", articleID, err)
+	// Update status to ready
+	if err := p.updateArticleStatus(articleID, "ready", ""); err != nil {
+		log.Printf("Failed to update article %d status to ready: %v", articleID, err)
 		return
 	}
 
 	log.Printf("Successfully processed article %d", articleID)
 }
 
-func (p *Processor) updateArticleStatus(articleID int, status, errorMessage string) error {
-	query := `UPDATE articles SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP
+func (p *Processor) updateArticleStatus(articleID int64, status, errorMessage string) error {
+	query := `UPDATE articles SET status = $1, error_message = $2, updated_at = NOW()
 	          WHERE id = $3`
 	_, err := p.db.Exec(query, status, errorMessage, articleID)
 	return err

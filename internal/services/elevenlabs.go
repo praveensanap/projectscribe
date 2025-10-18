@@ -36,7 +36,7 @@ type voiceSettings struct {
 
 // ConvertTextToSpeech converts text to speech and uploads it to Supabase storage
 // Returns the public URL where audio is stored
-func (e *ElevenLabsService) ConvertTextToSpeech(text string, articleID int, language, style string) (string, error) {
+func (e *ElevenLabsService) ConvertTextToSpeech(text string, articleID int64, language, style string) (string, error) {
 	// Use default voice ID (Rachel - a versatile voice)
 	// You can change this to other voice IDs from ElevenLabs
 	voiceID := "21m00Tcm4TlvDq8ikWAM"

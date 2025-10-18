@@ -15,10 +15,13 @@ type Config struct {
 	ElevenLabsAPIKey     string
 	AudioStoragePath     string
 	StorageEndpoint      string
+	StoragePublicURL     string
 	StorageRegion        string
 	StorageAccessKey     string
 	StorageSecretKey     string
 	StorageBucketName    string
+	SupabaseURL          string
+	SupabaseJWTSecret    string
 }
 
 func Load() (*Config, error) {
@@ -33,10 +36,13 @@ func Load() (*Config, error) {
 		ElevenLabsAPIKey:  getEnv("ELEVENLABS_API_KEY", ""),
 		AudioStoragePath:  getEnv("AUDIO_STORAGE_PATH", "./storage/audio"),
 		StorageEndpoint:   getEnv("STORAGE_ENDPOINT", ""),
+		StoragePublicURL:  getEnv("STORAGE_PUBLIC_URL", ""),
 		StorageRegion:     getEnv("STORAGE_REGION", "us-east-1"),
 		StorageAccessKey:  getEnv("STORAGE_ACCESS_KEY", ""),
 		StorageSecretKey:  getEnv("STORAGE_SECRET_KEY", ""),
 		StorageBucketName: getEnv("STORAGE_BUCKET_NAME", "audio"),
+		SupabaseURL:       getEnv("SUPABASE_URL", ""),
+		SupabaseJWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -49,6 +55,10 @@ func Load() (*Config, error) {
 
 	if cfg.ElevenLabsAPIKey == "" {
 		return nil, fmt.Errorf("ELEVENLABS_API_KEY environment variable is required")
+	}
+
+	if cfg.SupabaseJWTSecret == "" {
+		return nil, fmt.Errorf("SUPABASE_JWT_SECRET environment variable is required")
 	}
 
 	return cfg, nil
