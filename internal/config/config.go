@@ -1,0 +1,53 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/joho/godotenv"
+)
+
+type Config struct {
+	DatabaseURL       string
+	Port              string
+	Environment       string
+	GeminiAPIKey      string
+	ElevenLabsAPIKey  string
+	AudioStoragePath  string
+}
+
+func Load() (*Config, error) {
+	// Try to load .env file, but don't fail if it doesn't exist
+	_ = godotenv.Load()
+
+	cfg := &Config{
+		DatabaseURL:      getEnv("DATABASE_URL", ""),
+		Port:             getEnv("PORT", "8080"),
+		Environment:      getEnv("ENV", "development"),
+		GeminiAPIKey:     getEnv("GEMINI_API_KEY", ""),
+		ElevenLabsAPIKey: getEnv("ELEVENLABS_API_KEY", ""),
+		AudioStoragePath: getEnv("AUDIO_STORAGE_PATH", "./storage/audio"),
+	}
+
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
+	}
+
+	if cfg.GeminiAPIKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is required")
+	}
+
+	if cfg.ElevenLabsAPIKey == "" {
+		return nil, fmt.Errorf("ELEVENLABS_API_KEY environment variable is required")
+	}
+
+	return cfg, nil
+}
+
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
