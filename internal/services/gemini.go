@@ -62,15 +62,16 @@ type geminiResponse struct {
 
 // SummarizeArticle fetches and summarizes an article from a URL
 // length: "s" (1min), "m" (5min), "l" (full article)
-func (g *GeminiService) SummarizeArticle(url string, length string) (string, string, error) {
+// style: "summarize" (default), "explain", "simplify", etc.
+func (g *GeminiService) SummarizeArticle(url string, length string, style string) (string, string, error) {
 	// First, extract the article content from the webpage
 	content, err := g.extractArticleContent(url)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to extract article: %w", err)
 	}
 
-	// Then summarize based on length
-	summary, err := g.summarize(content, length)
+	// Then summarize based on length and style
+	summary, err := g.summarize(content, length, style)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to summarize: %w", err)
 	}
@@ -142,7 +143,7 @@ func (g *GeminiService) extractArticleContent(url string) (string, error) {
 	return geminiResp.Candidates[0].Content.Parts[0].Text, nil
 }
 
-func (g *GeminiService) summarize(content string, length string) (string, error) {
+func (g *GeminiService) summarize(content string, length string, style string) (string, error) {
 	var targetLength string
 	switch length {
 	case "s":
@@ -155,7 +156,31 @@ func (g *GeminiService) summarize(content string, length string) (string, error)
 		targetLength = "approximately 5 minutes of reading time"
 	}
 
-	prompt := fmt.Sprintf(`Please summarize the following article to %s.
+	// Default style is summarize if not provided
+	if style == "" {
+		style = "summarize"
+	}
+
+	// Build style-specific instruction
+	var styleInstruction string
+	switch style {
+	case "explain":
+		styleInstruction = "Explain the key concepts and ideas in detail, making them easy to understand."
+	case "simplify":
+		styleInstruction = "Simplify the content using plain language, making it accessible to everyone."
+	case "detailed":
+		styleInstruction = "Provide a detailed analysis with key points, insights, and important details."
+	case "bullet":
+		styleInstruction = "Present the main points in a clear, structured way, highlighting key takeaways."
+	case "story":
+		styleInstruction = "Present the content as an engaging narrative, making it compelling and interesting."
+	case "summarize":
+		fallthrough
+	default:
+		styleInstruction = "Summarize the main points and key ideas concisely."
+	}
+
+	prompt := fmt.Sprintf(`%s to %s
 
 IMPORTANT: This summary will be converted to speech, so:
 - Use only spoken language and natural phrasing
@@ -173,7 +198,7 @@ IMPORTANT: This summary will be converted to speech, so:
 Article content:
 %s
 
-Summary:`, targetLength, content)
+Summary:`, styleInstruction, targetLength, content)
 
 	reqBody := geminiRequest{
 		Contents: []geminiContent{

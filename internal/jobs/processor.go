@@ -14,14 +14,16 @@ type Processor struct {
 	geminiService     *services.GeminiService
 	elevenLabsService *services.ElevenLabsService
 	storageService    *services.StorageService
+	apnsService       *services.APNSService
 }
 
-func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService, storageService *services.StorageService) *Processor {
+func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService, storageService *services.StorageService, apnsService *services.APNSService) *Processor {
 	return &Processor{
 		db:                db,
 		geminiService:     geminiService,
 		elevenLabsService: elevenLabsService,
 		storageService:    storageService,
+		apnsService:       apnsService,
 	}
 }
 
@@ -47,11 +49,17 @@ func (p *Processor) ProcessArticle(articleID int64) {
 	}
 
 	// Step 1: Summarize the article using Gemini
-	log.Printf("Summarizing article %d with length %s", articleID, length)
-	originalContent, summary, err := p.geminiService.SummarizeArticle(url, length)
+	styleStr := "summarize" // default style
+	if style.Valid && style.String != "" {
+		styleStr = style.String
+	}
+
+	log.Printf("Summarizing article %d with length %s and style %s", articleID, length, styleStr)
+	originalContent, summary, err := p.geminiService.SummarizeArticle(url, length, styleStr)
 	if err != nil {
 		log.Printf("Failed to summarize article %d: %v", articleID, err)
 		p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to summarize: %v", err))
+		p.sendFailureNotification(articleID, "Failed to summarize")
 		return
 	}
 
@@ -119,6 +127,7 @@ func (p *Processor) ProcessArticle(articleID int64) {
 		if err != nil {
 			log.Printf("Failed to convert article %d to speech: %v", articleID, err)
 			p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to convert to speech: %v", err))
+			p.sendFailureNotification(articleID, "Failed to convert to speech")
 			return
 		}
 
@@ -141,6 +150,17 @@ func (p *Processor) ProcessArticle(articleID int64) {
 	}
 
 	log.Printf("Successfully processed article %d", articleID)
+
+	// Send push notification to Apple device
+	if p.apnsService != nil {
+		log.Printf("Sending push notification for article %d", articleID)
+		if err := p.apnsService.SendArticleReadyNotification(articleID, title); err != nil {
+			log.Printf("Failed to send push notification for article %d: %v", articleID, err)
+			// Don't fail the entire process if notification fails
+		} else {
+			log.Printf("Successfully sent push notification for article %d to device %s", articleID, p.apnsService.GetDeviceToken())
+		}
+	}
 }
 
 func (p *Processor) updateArticleStatus(articleID int64, status, errorMessage string) error {
@@ -148,4 +168,15 @@ func (p *Processor) updateArticleStatus(articleID int64, status, errorMessage st
 	          WHERE id = $3`
 	_, err := p.db.Exec(query, status, errorMessage, articleID)
 	return err
+}
+
+func (p *Processor) sendFailureNotification(articleID int64, errorMsg string) {
+	if p.apnsService != nil {
+		log.Printf("Sending failure notification for article %d", articleID)
+		if err := p.apnsService.SendArticleFailedNotification(articleID, errorMsg); err != nil {
+			log.Printf("Failed to send failure notification for article %d: %v", articleID, err)
+		} else {
+			log.Printf("Successfully sent failure notification for article %d to device %s", articleID, p.apnsService.GetDeviceToken())
+		}
+	}
 }

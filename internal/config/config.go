@@ -22,6 +22,9 @@ type Config struct {
 	StorageBucketName    string
 	SupabaseURL          string
 	SupabaseJWTSecret    string
+	APNSTestToken        string
+	APNSBundleID         string
+	APNSProduction       bool
 }
 
 func Load() (*Config, error) {
@@ -43,6 +46,9 @@ func Load() (*Config, error) {
 		StorageBucketName: getEnv("STORAGE_BUCKET_NAME", "audio"),
 		SupabaseURL:       getEnv("SUPABASE_URL", ""),
 		SupabaseJWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
+		APNSTestToken:     getEnv("APNS_TEST_TOKEN", ""),
+		APNSBundleID:      getEnv("APNS_BUNDLE_ID", ""),
+		APNSProduction:    getEnv("APNS_PRODUCTION", "false") == "true",
 	}
 
 	if cfg.DatabaseURL == "" {

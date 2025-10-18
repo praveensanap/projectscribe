@@ -34,3 +34,4 @@ Thumbs.db
 storage/audio/*.mp3
 storage/audio/*.wav
 !storage/audio/.gitkeep
+AuthKey_4U3YCCS8J2.p8

@@ -27,6 +27,7 @@ type ttsRequest struct {
 	Text          string        `json:"text"`
 	ModelID       string        `json:"model_id"`
 	VoiceSettings voiceSettings `json:"voice_settings"`
+	LanguageCode  string        `json:"language_code,omitempty"`
 }
 
 type voiceSettings struct {
@@ -41,13 +42,25 @@ func (e *ElevenLabsService) ConvertTextToSpeech(text string, articleID int64, la
 	// You can change this to other voice IDs from ElevenLabs
 	voiceID := "21m00Tcm4TlvDq8ikWAM"
 
+	// Select model based on language
+	modelID := "eleven_multilingual_v2"
+	if language == "" || language == "en" {
+		// Use monolingual model for English or when language is not specified
+		modelID = "eleven_monolingual_v1"
+	}
+
 	reqBody := ttsRequest{
 		Text:    text,
-		ModelID: "eleven_monolingual_v1",
+		ModelID: modelID,
 		VoiceSettings: voiceSettings{
 			Stability:       0.5,
 			SimilarityBoost: 0.75,
 		},
+	}
+
+	// Add language code if specified and not English
+	if language != "" && language != "en" {
+		reqBody.LanguageCode = language
 	}
 
 	jsonData, err := json.Marshal(reqBody)
