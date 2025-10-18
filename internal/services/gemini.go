@@ -61,8 +61,7 @@ func (g *GeminiService) SummarizeArticle(url string, length string) (string, str
 	return content, summary, nil
 }
 
-func (g *GeminiService) extractArticleContent(url string) (string, error) {
-	prompt := fmt.Sprintf(`Extract the main article content from this URL: %s
+const PROMPT = `Extract the main article content from this URL: %s
 
 Please:
 1. Remove all navigation menus, headers, footers, ads, and other non-article content
@@ -71,7 +70,10 @@ Please:
 4. Remove any JavaScript, CSS, or HTML tags
 5. Return clean, readable text
 
-Return only the extracted article content.`, url)
+Return only the extracted article content.`
+
+func (g *GeminiService) extractArticleContent(url string) (string, error) {
+	prompt := fmt.Sprintf(PROMPT, url)
 
 	reqBody := geminiRequest{
 		Contents: []geminiContent{
@@ -88,7 +90,7 @@ Return only the extracted article content.`, url)
 		return "", err
 	}
 
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", g.apiKey)
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=%s", g.apiKey)
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
@@ -164,7 +166,7 @@ Summary:`, targetLength, content)
 		return "", err
 	}
 
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", g.apiKey)
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=%s", g.apiKey)
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err

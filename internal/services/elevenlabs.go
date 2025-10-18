@@ -2,25 +2,24 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 )
 
 type ElevenLabsService struct {
-	apiKey      string
-	storagePath string
-	client      *http.Client
+	apiKey         string
+	storageService *StorageService
+	client         *http.Client
 }
 
-func NewElevenLabsService(apiKey, storagePath string) *ElevenLabsService {
+func NewElevenLabsService(apiKey string, storageService *StorageService) *ElevenLabsService {
 	return &ElevenLabsService{
-		apiKey:      apiKey,
-		storagePath: storagePath,
-		client:      &http.Client{},
+		apiKey:         apiKey,
+		storageService: storageService,
+		client:         &http.Client{},
 	}
 }
 
@@ -35,14 +34,9 @@ type voiceSettings struct {
 	SimilarityBoost float64 `json:"similarity_boost"`
 }
 
-// ConvertTextToSpeech converts text to speech and saves it to a file
-// Returns the file path where audio is saved
+// ConvertTextToSpeech converts text to speech and uploads it to Supabase storage
+// Returns the public URL where audio is stored
 func (e *ElevenLabsService) ConvertTextToSpeech(text string, articleID int, language, style string) (string, error) {
-	// Ensure storage directory exists
-	if err := os.MkdirAll(e.storagePath, 0755); err != nil {
-		return "", fmt.Errorf("failed to create storage directory: %w", err)
-	}
-
 	// Use default voice ID (Rachel - a versatile voice)
 	// You can change this to other voice IDs from ElevenLabs
 	voiceID := "21m00Tcm4TlvDq8ikWAM"
@@ -88,14 +82,14 @@ func (e *ElevenLabsService) ConvertTextToSpeech(text string, articleID int, lang
 		return "", fmt.Errorf("failed to read audio data: %w", err)
 	}
 
-	// Generate filename
-	filename := fmt.Sprintf("article_%d.mp3", articleID)
-	filePath := filepath.Join(e.storagePath, filename)
+	// Generate storage key
+	key := GenerateAudioKey(articleID)
 
-	// Save audio file
-	if err := os.WriteFile(filePath, audioData, 0644); err != nil {
-		return "", fmt.Errorf("failed to save audio file: %w", err)
+	// Upload to Supabase storage
+	publicURL, err := e.storageService.UploadFile(context.Background(), key, audioData, "audio/mpeg")
+	if err != nil {
+		return "", fmt.Errorf("failed to upload audio to storage: %w", err)
 	}
 
-	return filePath, nil
+	return publicURL, nil
 }

@@ -63,7 +63,20 @@ func (s *Server) setupRoutes() {
 	// Article routes
 	// Initialize services
 	geminiService := services.NewGeminiService(s.config.GeminiAPIKey)
-	elevenLabsService := services.NewElevenLabsService(s.config.ElevenLabsAPIKey, s.config.AudioStoragePath)
+
+	// Initialize storage service
+	storageService, err := services.NewStorageService(
+		s.config.StorageEndpoint,
+		s.config.StorageRegion,
+		s.config.StorageAccessKey,
+		s.config.StorageSecretKey,
+		s.config.StorageBucketName,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize storage service: %v", err))
+	}
+
+	elevenLabsService := services.NewElevenLabsService(s.config.ElevenLabsAPIKey, storageService)
 	jobProcessor := jobs.NewProcessor(s.db, geminiService, elevenLabsService)
 
 	articleHandler := handlers.NewArticleHandler(s.db, jobProcessor)

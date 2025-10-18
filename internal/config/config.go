@@ -8,12 +8,17 @@ import (
 )
 
 type Config struct {
-	DatabaseURL       string
-	Port              string
-	Environment       string
-	GeminiAPIKey      string
-	ElevenLabsAPIKey  string
-	AudioStoragePath  string
+	DatabaseURL          string
+	Port                 string
+	Environment          string
+	GeminiAPIKey         string
+	ElevenLabsAPIKey     string
+	AudioStoragePath     string
+	StorageEndpoint      string
+	StorageRegion        string
+	StorageAccessKey     string
+	StorageSecretKey     string
+	StorageBucketName    string
 }
 
 func Load() (*Config, error) {
@@ -21,12 +26,17 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DatabaseURL:      getEnv("DATABASE_URL", ""),
-		Port:             getEnv("PORT", "8080"),
-		Environment:      getEnv("ENV", "development"),
-		GeminiAPIKey:     getEnv("GEMINI_API_KEY", ""),
-		ElevenLabsAPIKey: getEnv("ELEVENLABS_API_KEY", ""),
-		AudioStoragePath: getEnv("AUDIO_STORAGE_PATH", "./storage/audio"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		Port:              getEnv("PORT", "8080"),
+		Environment:       getEnv("ENV", "development"),
+		GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
+		ElevenLabsAPIKey:  getEnv("ELEVENLABS_API_KEY", ""),
+		AudioStoragePath:  getEnv("AUDIO_STORAGE_PATH", "./storage/audio"),
+		StorageEndpoint:   getEnv("STORAGE_ENDPOINT", ""),
+		StorageRegion:     getEnv("STORAGE_REGION", "us-east-1"),
+		StorageAccessKey:  getEnv("STORAGE_ACCESS_KEY", ""),
+		StorageSecretKey:  getEnv("STORAGE_SECRET_KEY", ""),
+		StorageBucketName: getEnv("STORAGE_BUCKET_NAME", "audio"),
 	}
 
 	if cfg.DatabaseURL == "" {
