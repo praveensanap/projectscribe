@@ -37,7 +37,7 @@ type APSAlert struct {
 }
 
 // NewAPNSService creates a new APNS service with a static token
-func NewAPNSService(token, bundleID string, production bool) *APNSService {
+func NewAPNSService(token, deviceToken, bundleID string, production bool) *APNSService {
 	production = false
 
 	// Create HTTP/2 client
@@ -56,7 +56,7 @@ func NewAPNSService(token, bundleID string, production bool) *APNSService {
 		token:       token,
 		bundleID:    bundleID,
 		production:  production,
-		deviceToken: "633705b998ae03e22206f24b4eb68523d2f91f219eac5fdcbeeffe6affa13eda", // Hardcoded device token
+		deviceToken: deviceToken,
 		client:      client,
 	}
 }

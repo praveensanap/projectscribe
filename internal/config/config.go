@@ -8,23 +8,24 @@ import (
 )
 
 type Config struct {
-	DatabaseURL          string
-	Port                 string
-	Environment          string
-	GeminiAPIKey         string
-	ElevenLabsAPIKey     string
-	AudioStoragePath     string
-	StorageEndpoint      string
-	StoragePublicURL     string
-	StorageRegion        string
-	StorageAccessKey     string
-	StorageSecretKey     string
-	StorageBucketName    string
-	SupabaseURL          string
-	SupabaseJWTSecret    string
-	APNSTestToken        string
-	APNSBundleID         string
-	APNSProduction       bool
+	DatabaseURL       string
+	Port              string
+	Environment       string
+	GeminiAPIKey      string
+	ElevenLabsAPIKey  string
+	AudioStoragePath  string
+	StorageEndpoint   string
+	StoragePublicURL  string
+	StorageRegion     string
+	StorageAccessKey  string
+	StorageSecretKey  string
+	StorageBucketName string
+	SupabaseURL       string
+	SupabaseJWTSecret string
+	APNSTestToken     string
+	APNSDeviceToken   string
+	APNSBundleID      string
+	APNSProduction    bool
 }
 
 func Load() (*Config, error) {
@@ -46,7 +47,8 @@ func Load() (*Config, error) {
 		StorageBucketName: getEnv("STORAGE_BUCKET_NAME", "audio"),
 		SupabaseURL:       getEnv("SUPABASE_URL", ""),
 		SupabaseJWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
-		APNSTestToken:     getEnv("APNS_TEST_TOKEN", ""),
+		APNSTestToken:     getEnv("APNS_JWT_TOKEN", ""),
+		APNSDeviceToken:   getEnv("APNS_DEVICE_TOKEN", ""),
 		APNSBundleID:      getEnv("APNS_BUNDLE_ID", ""),
 		APNSProduction:    getEnv("APNS_PRODUCTION", "false") == "true",
 	}

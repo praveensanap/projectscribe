@@ -15,15 +15,17 @@ type Processor struct {
 	elevenLabsService *services.ElevenLabsService
 	storageService    *services.StorageService
 	apnsService       *services.APNSService
+	falService        *services.FalService
 }
 
-func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService, storageService *services.StorageService, apnsService *services.APNSService) *Processor {
+func NewProcessor(db *sql.DB, geminiService *services.GeminiService, elevenLabsService *services.ElevenLabsService, storageService *services.StorageService, apnsService *services.APNSService, falService *services.FalService) *Processor {
 	return &Processor{
 		db:                db,
 		geminiService:     geminiService,
 		elevenLabsService: elevenLabsService,
 		storageService:    storageService,
 		apnsService:       apnsService,
+		falService:        falService,
 	}
 }
 
@@ -54,8 +56,13 @@ func (p *Processor) ProcessArticle(articleID int64) {
 		styleStr = style.String
 	}
 
+	languageStr := "en"
+	if language.Valid && language.String != "" {
+		languageStr = language.String
+	}
+
 	log.Printf("Summarizing article %d with length %s and style %s", articleID, length, styleStr)
-	originalContent, summary, err := p.geminiService.SummarizeArticle(url, length, styleStr)
+	originalContent, summary, err := p.geminiService.SummarizeArticle(url, length, languageStr, styleStr)
 	if err != nil {
 		log.Printf("Failed to summarize article %d: %v", articleID, err)
 		p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to summarize: %v", err))
@@ -141,6 +148,65 @@ func (p *Processor) ProcessArticle(articleID int64) {
 		}
 
 		log.Printf("Successfully converted article %d to speech", articleID)
+	}
+
+	// Step 4: If format is video, generate video using Fal API (Sora 2)
+	if format == "video" && p.falService != nil {
+		log.Printf("Generating video for article %d using Fal API (Sora 2)", articleID)
+
+		// Determine video duration based on length
+		var duration int
+		switch length {
+		case "s":
+			duration = 10 // 10 seconds for short
+		case "m":
+			duration = 30 // 30 seconds for medium
+		case "l":
+			duration = 60 // 60 seconds for long
+		default:
+			duration = 30 // default to medium
+		}
+
+		// Generate video from summary
+		videoURL, err := p.falService.GenerateVideo(summary, duration)
+		if err != nil {
+			log.Printf("Failed to generate video for article %d: %v", articleID, err)
+			p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to generate video: %v", err))
+			p.sendFailureNotification(articleID, "Failed to generate video")
+			return
+		}
+
+		log.Printf("Video generated successfully for article %d, downloading from %s", articleID, videoURL)
+
+		// Download and save the video
+		videoPath, err := p.falService.DownloadVideo(videoURL, int(articleID))
+		if err != nil {
+			log.Printf("Failed to download video for article %d: %v", articleID, err)
+			p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to download video: %v", err))
+			p.sendFailureNotification(articleID, "Failed to download video")
+			return
+		}
+
+		// Upload video to storage
+		videoKey := services.GenerateVideoKey(articleID)
+		videoStorageURL, err := p.storageService.UploadVideoFile(context.Background(), videoKey, videoPath)
+		if err != nil {
+			log.Printf("Failed to upload video to storage for article %d: %v", articleID, err)
+			p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to upload video: %v", err))
+			p.sendFailureNotification(articleID, "Failed to upload video")
+			return
+		}
+
+		// Save video file path
+		updateQuery := `UPDATE articles SET video_file_path = $1, updated_at = CURRENT_TIMESTAMP
+		                WHERE id = $2`
+		if _, err := p.db.Exec(updateQuery, videoStorageURL, articleID); err != nil {
+			log.Printf("Failed to save video path for article %d: %v", articleID, err)
+			p.updateArticleStatus(articleID, "failed", fmt.Sprintf("Failed to save video path: %v", err))
+			return
+		}
+
+		log.Printf("Successfully generated and uploaded video for article %d", articleID)
 	}
 
 	// Update status to ready

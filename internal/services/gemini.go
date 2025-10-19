@@ -12,11 +12,13 @@ import (
 	"strings"
 
 	"google.golang.org/genai"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 type GeminiService struct {
-	apiKey     string
-	client     *http.Client
+	apiKey      string
+	client      *http.Client
 	genaiClient *genai.Client
 }
 
@@ -32,8 +34,8 @@ func NewGeminiService(apiKey string) *GeminiService {
 	}
 
 	return &GeminiService{
-		apiKey:     apiKey,
-		client:     &http.Client{},
+		apiKey:      apiKey,
+		client:      &http.Client{},
 		genaiClient: genaiClient,
 	}
 }
@@ -63,7 +65,7 @@ type geminiResponse struct {
 // SummarizeArticle fetches and summarizes an article from a URL
 // length: "s" (1min), "m" (5min), "l" (full article)
 // style: "summarize" (default), "explain", "simplify", etc.
-func (g *GeminiService) SummarizeArticle(url string, length string, style string) (string, string, error) {
+func (g *GeminiService) SummarizeArticle(url string, length string, language string, style string) (string, string, error) {
 	// First, extract the article content from the webpage
 	content, err := g.extractArticleContent(url)
 	if err != nil {
@@ -71,7 +73,7 @@ func (g *GeminiService) SummarizeArticle(url string, length string, style string
 	}
 
 	// Then summarize based on length and style
-	summary, err := g.summarize(content, length, style)
+	summary, err := g.summarize(content, length, language, style)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to summarize: %w", err)
 	}
@@ -91,7 +93,40 @@ Please:
 Return only the extracted article content.`
 
 func (g *GeminiService) extractArticleContent(url string) (string, error) {
-	prompt := fmt.Sprintf(PROMPT, url)
+	// 1. Fetch the raw HTML
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	// 2. Parse and extract visible text using goquery
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse HTML: %w", err)
+	}
+
+	var extractedText string
+	doc.Find("p, h1, h2, h3, li").Each(func(i int, s *goquery.Selection) {
+		text := s.Text()
+		if len(text) > 0 {
+			extractedText += text + "\n"
+		}
+	})
+
+	if extractedText == "" {
+		return "", fmt.Errorf("no text extracted from HTML")
+	}
+
+	// 3. Ask Gemini to clean it up
+	prompt := fmt.Sprintf(
+		"Clean and summarize the following article text. Remove navigation menus, ads, and unrelated content:\n\n%s",
+		extractedText,
+	)
 
 	reqBody := geminiRequest{
 		Contents: []geminiContent{
@@ -108,27 +143,29 @@ func (g *GeminiService) extractArticleContent(url string) (string, error) {
 		return "", err
 	}
 
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=%s", g.apiKey)
+	apiURL := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=%s",
+		g.apiKey,
+	)
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := g.client.Do(req)
+	resp2, err := g.client.Do(req)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer resp2.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp2.Body)
 	if err != nil {
 		return "", err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gemini API error: %s - %s", resp.Status, string(body))
+	if resp2.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gemini API error: %s - %s", resp2.Status, string(body))
 	}
 
 	var geminiResp geminiResponse
@@ -143,7 +180,7 @@ func (g *GeminiService) extractArticleContent(url string) (string, error) {
 	return geminiResp.Candidates[0].Content.Parts[0].Text, nil
 }
 
-func (g *GeminiService) summarize(content string, length string, style string) (string, error) {
+func (g *GeminiService) summarize(content string, length string, language string, style string) (string, error) {
 	var targetLength string
 	switch length {
 	case "s":
@@ -162,22 +199,10 @@ func (g *GeminiService) summarize(content string, length string, style string) (
 	}
 
 	// Build style-specific instruction
-	var styleInstruction string
-	switch style {
-	case "explain":
-		styleInstruction = "Explain the key concepts and ideas in detail, making them easy to understand."
-	case "simplify":
-		styleInstruction = "Simplify the content using plain language, making it accessible to everyone."
-	case "detailed":
-		styleInstruction = "Provide a detailed analysis with key points, insights, and important details."
-	case "bullet":
-		styleInstruction = "Present the main points in a clear, structured way, highlighting key takeaways."
-	case "story":
-		styleInstruction = "Present the content as an engaging narrative, making it compelling and interesting."
-	case "summarize":
-		fallthrough
-	default:
-		styleInstruction = "Summarize the main points and key ideas concisely."
+	styleInstruction := style
+
+	if language != "" {
+		styleInstruction += fmt.Sprintf(" In language [%s]", language)
 	}
 
 	prompt := fmt.Sprintf(`%s to %s

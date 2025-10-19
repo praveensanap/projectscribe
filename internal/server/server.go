@@ -65,14 +65,18 @@ func (s *Server) setupRoutes() {
 
 	elevenLabsService := services.NewElevenLabsService(s.config.ElevenLabsAPIKey, storageService)
 
+	// Initialize Fal service for video generation
+	falService := services.NewFalService()
+
 	// Initialize APNS service
 	apnsService := services.NewAPNSService(
 		s.config.APNSTestToken,
+		s.config.APNSDeviceToken,
 		s.config.APNSBundleID,
 		s.config.APNSProduction,
 	)
 
-	jobProcessor := jobs.NewProcessor(s.db, geminiService, elevenLabsService, storageService, apnsService)
+	jobProcessor := jobs.NewProcessor(s.db, geminiService, elevenLabsService, storageService, apnsService, falService)
 
 	articleHandler := handlers.NewArticleHandler(s.db, jobProcessor)
 	api.HandleFunc("/articles", articleHandler.CreateArticle).Methods("POST")

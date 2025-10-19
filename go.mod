@@ -3,6 +3,7 @@ module pocketscribe
 go 1.24.5
 
 require (
+	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/aws/aws-sdk-go-v2 v1.39.3
 	github.com/aws/aws-sdk-go-v2/config v1.31.13
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.17
@@ -18,6 +19,7 @@ require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10 // indirect

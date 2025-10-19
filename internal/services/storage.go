@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -72,6 +73,7 @@ func (s *StorageService) UploadFile(ctx context.Context, key string, data []byte
 	}
 
 	// Generate public URL
+	// https://fawgciilqoctwjwcjaqc.supabase.co/storage/v1/object/public/pocketscribe/thumbnails/article_19.png
 	publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.publicURL, s.bucketName, key)
 	return publicURL, nil
 }
@@ -125,4 +127,32 @@ func GenerateAudioKey(articleID int64) string {
 // GenerateThumbnailKey generates a storage key for a thumbnail image
 func GenerateThumbnailKey(articleID int64) string {
 	return filepath.Join("thumbnails", fmt.Sprintf("article_%d.png", articleID))
+}
+
+// GenerateVideoKey generates a storage key for a video file
+func GenerateVideoKey(articleID int64) string {
+	return filepath.Join("videos", fmt.Sprintf("article_%d.mp4", articleID))
+}
+
+// UploadVideoFile uploads a video file from local path to Supabase storage
+func (s *StorageService) UploadVideoFile(ctx context.Context, key string, localPath string) (string, error) {
+	// Read the video file
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read video file: %w", err)
+	}
+
+	// Upload to storage
+	publicURL, err := s.UploadFile(ctx, key, data, "video/mp4")
+	if err != nil {
+		return "", fmt.Errorf("failed to upload video: %w", err)
+	}
+
+	// Clean up local file after successful upload
+	if err := os.Remove(localPath); err != nil {
+		// Log but don't fail if we can't delete the local file
+		fmt.Printf("Warning: failed to delete local video file %s: %v\n", localPath, err)
+	}
+
+	return publicURL, nil
 }
